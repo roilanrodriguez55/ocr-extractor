@@ -1,6 +1,13 @@
-"""Core OCR functions: image preprocessing, text cleaning, and PDF reading."""
+"""Core OCR helpers: image preprocessing and text cleaning.
+
+PDF reading lives in :mod:`ocr_extractor.readers.pdf`; the format-agnostic
+entry point is :func:`ocr_extractor.read_document` (in
+:mod:`ocr_extractor.dispatcher`). The ``read_pdf`` function here is a
+backward-compatible alias kept for one release cycle.
+"""
 
 import re
+import warnings
 
 import cv2
 import numpy as np
@@ -82,7 +89,7 @@ def clean_text(text):
     return "\n".join(cleaned)
 
 
-def read_pdf(pdf_path, dpi=300, lang="eng", verbose=True):
+def _read_pdf_legacy(pdf_path, dpi=300, lang="eng", verbose=True):
     """Read a PDF, run OCR on each page, and return the cleaned text.
 
     Each page is wrapped between the markers
@@ -99,7 +106,8 @@ def read_pdf(pdf_path, dpi=300, lang="eng", verbose=True):
         Tesseract language code (e.g. ``"eng"``, ``"spa"``).
         Defaults to ``"eng"``.
     verbose : bool, optional
-        If ``True``, print progress messages per page. Defaults to ``True``.
+        If ``True``, print progress messages per page. Defaults to
+        ``True``.
 
     Returns
     -------
@@ -124,3 +132,26 @@ def read_pdf(pdf_path, dpi=300, lang="eng", verbose=True):
         all_text += "=== END PAGE " + str(i + 1) + " ===\n\n"
 
     return all_text
+
+
+def read_pdf(pdf_path, dpi=300, lang="eng", verbose=True):
+    """Deprecated alias for :func:`ocr_extractor.read_document`.
+
+    .. deprecated::
+        Use :func:`ocr_extractor.read_document` instead. ``read_pdf`` will
+        be removed in the next major release.
+    """
+    warnings.warn(
+        "ocr_extractor.read_pdf is deprecated; use read_document instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _read_pdf_legacy(pdf_path, dpi=dpi, lang=lang, verbose=verbose)
+
+
+__all__ = [
+    "preprocess_image",
+    "clean_line",
+    "clean_text",
+    "read_pdf",
+]

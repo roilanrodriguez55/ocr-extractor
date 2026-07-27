@@ -1,13 +1,14 @@
 # OCR Extractor
 
-Extract text from PDF files via OCR (Optical Character Recognition). It
-converts each page of the PDF to an image, preprocesses it to improve
-quality, and runs Tesseract to produce clean text.
+Extract text from office documents and images. PDF and image files are
+processed via OCR (Tesseract + OpenCV). Modern Office files
+(`.docx`/`.pptx`/`.xlsx`) are read directly. Legacy Office files
+(`.doc`/`.xls`/`.ppt`) are converted via LibreOffice headless.
 
 **`ocr-extractor` is distributed as an installable Python package.** You
 can use it as a dependency in other projects (`pip install ocr-extractor`),
 run it from the command line (`ocr-extractor file.pdf`), or import it as a
-library (`from ocr_extractor import read_pdf`).
+library (`from ocr_extractor import read_document`).
 
 ## 📋 Table of contents
 
@@ -31,17 +32,22 @@ library (`from ocr_extractor import read_pdf`).
 
 ## ✨ Features
 
+- **Multi-format support**: PDF, images (PNG/JPG/TIFF/BMP/WEBP/HEIC),
+  modern Office (DOCX/PPTX/XLSX), and legacy Office (DOC/XLS/PPT via
+  LibreOffice) — all through a single `read_document` entry point.
 - **PDF → Image conversion**: each page of the PDF is rendered to a
   high-resolution image (300 DPI by default) using `pdf2image`.
 - **Image preprocessing**: grayscale conversion and noise removal with
   `OpenCV` (`fastNlMeansDenoising`) to improve OCR accuracy.
+- **Multi-page TIFF support**: each frame of a multi-page TIFF becomes
+  its own `=== PAGE N ===` block, useful for scanner output.
 - **Tesseract OCR**: text extraction via `pytesseract` with a configurable
   language (`eng` by default).
 - **Text cleaning**: filtering of short lines, disallowed characters, and
-  symbol-only lines.
-- **Page markers**: the resulting text is wrapped between
-  `=== PAGE N ===` / `=== END PAGE N ===` markers so each page is
-  identifiable.
+  symbol-only lines (applied only to OCR-based formats).
+- **Page markers**: PDF, TIFF, PPTX, and XLSX output is wrapped between
+  `=== PAGE N ===` / `=== END PAGE N ===` markers so each page/slide/sheet
+  is identifiable.
 - **Public API + CLI**: installable as a dependency, invokable as the
   `ocr-extractor` command, or importable as a Python library.
 
@@ -70,11 +76,27 @@ library (`from ocr_extractor import read_pdf`).
   # macOS
   brew install poppler
   ```
+- **LibreOffice** — required only for legacy Office files (`.doc`,
+  `.xls`, `.ppt`):
+  ```bash
+  # Debian / Ubuntu
+  sudo apt-get install libreoffice
+
+  # Fedora
+  sudo dnf install libreoffice
+
+  # macOS
+  brew install --cask libreoffice
+  ```
 - **Tesseract language packs** (optional). The default is `eng`; install
   others as needed, for example:
   ```bash
   sudo apt-get install tesseract-ocr-spa   # Spanish
   sudo apt-get install tesseract-ocr-deu   # German
+  ```
+- **pillow-heif** (optional) — required for HEIC/HEIF images from iPhones:
+  ```bash
+  pip install ocr-extractor[heic]
   ```
 
 ## 📦 Installation
@@ -88,14 +110,20 @@ pip install ocr-extractor
 ```
 
 This installs the library and puts the `ocr-extractor` command on your
-`PATH`. Python dependencies are resolved automatically (Tesseract and
-Poppler remain system-level requirements).
+`PATH`. Python dependencies are resolved automatically (Tesseract,
+Poppler, and LibreOffice remain system-level requirements).
 
 To pin or constrain the version in `pyproject.toml` / `requirements.txt`:
 
 ```text
 # requirements.txt
-ocr-extractor>=0.1.0
+ocr-extractor>=0.2.0
+```
+
+For HEIC/HEIF support (iPhone photos), install the `[heic]` extra:
+
+```bash
+pip install ocr-extractor[heic]
 ```
 
 ### Editable install from the repository
@@ -120,7 +148,8 @@ If you don't want to install this project and only need the API from your
 own code, install the Python dependencies directly:
 
 ```bash
-pip install pytesseract pdf2image opencv-python-headless numpy Pillow
+pip install pytesseract pdf2image opencv-python-headless numpy Pillow \
+            python-docx python-pptx openpyxl
 ```
 
 > 💡 If your platform supports it, you can also use `opencv-python` instead
@@ -136,10 +165,14 @@ There are three ways to invoke the OCR, in order of recommendation:
 After `pip install ocr-extractor` (or `pip install -e .`):
 
 ```bash
-# Basic usage: writes texto_limpio.txt next to the PDF
+# Basic usage: writes texto_limpio.txt next to the input
 ocr-extractor file.pdf
+ocr-extractor scan.tiff                  # multi-page TIFF
+ocr-extractor report.docx                # no OCR — direct text extraction
+ocr-extractor presentation.pptx          # one marker block per slide
+ocr-extractor spreadsheet.xlsx           # one marker block per sheet
 
-# Customize output, resolution, and language
+# Customize output, resolution, and language (OCR formats only)
 ocr-extractor file.pdf -o output.txt --dpi 300 --lang spa
 
 # Quiet mode (no progress messages)
@@ -154,9 +187,9 @@ Available arguments:
 
 | Argument | Description | Default |
 |---|---|---|
-| `pdf` | Path to the input PDF (positional, required) | — |
+| `input` | Path to the input file (positional, required) | — |
 | `-o`, `--output` | Path to the output text file | `texto_limpio.txt` |
-| `--dpi` | Rendering resolution in DPI | `300` |
+| `--dpi` | Rendering resolution in DPI (OCR formats only) | `300` |
 | `--lang` | Tesseract language code (`eng`, `spa`, …) | `eng` |
 | `-q`, `--quiet` | Suppress progress messages | off |
 | `--version` | Print version and exit | — |
@@ -164,10 +197,15 @@ Available arguments:
 ### As a library (API)
 
 ```python
-from ocr_extractor import read_pdf
+from ocr_extractor import read_document
 
-# Process a PDF and get the text as a string
-text = read_pdf("file.pdf", dpi=300, lang="eng")
+# Format is detected by extension. Same call works for any supported format.
+text = read_document("file.pdf", dpi=300, lang="eng")
+text = read_document("scan.tiff")
+text = read_document("report.docx")
+text = read_document("presentation.pptx")
+text = read_document("spreadsheet.xlsx")
+text = read_document("legacy.doc")   # requires LibreOffice
 
 # You can also use the intermediate steps directly
 from ocr_extractor import preprocess_image, clean_text
@@ -179,11 +217,13 @@ gray = preprocess_image(pages[0])  # numpy.ndarray ready for OCR
 
 Functions exposed from `ocr_extractor`:
 
+- `read_document(path, *, dpi=300, lang="eng", verbose=True) -> str`
 - `preprocess_image(image_pil) -> numpy.ndarray`
 - `clean_line(line) -> str | None`
 - `clean_text(text) -> str`
-- `read_pdf(pdf_path, dpi=300, lang="eng", verbose=True) -> str`
-- `__version__` (string, e.g. `"0.1.0"`)
+- `read_pdf(pdf_path, dpi=300, lang="eng", verbose=True) -> str` *(deprecated, will be removed in the next major release)*
+- `SUPPORTED_FORMATS` — tuple of all supported extensions
+- `__version__` — string, e.g. `"0.2.0"`
 
 ### Backward-compatible `app.py` wrapper
 
@@ -205,14 +245,30 @@ ocr-extractor/
 ├── MANIFEST.in                 # Includes README.md in the sdist
 ├── .gitignore                  # Standard Python ignores
 ├── README.md                   # This file
+├── SUPPORTED_FORMATS.md        # Format inventory with priorities
 ├── app.py                      # Thin wrapper that delegates to ocr_extractor.cli
 └── ocr_extractor/              # Python package (what gets distributed)
-    ├── __init__.py             # Public API + __version__
-    ├── core.py                 # preprocess_image, clean_line, clean_text, read_pdf
-    └── cli.py                  # argparse + main() (CLI entry point)
+    ├── __init__.py             # Public API + __version__ + SUPPORTED_FORMATS
+    ├── core.py                 # preprocess_image, clean_line, clean_text, deprecated read_pdf
+    ├── dispatcher.py           # read_document (format detection + routing)
+    ├── cli.py                  # argparse + main() (CLI entry point)
+    └── readers/                # One module per format family
+        ├── __init__.py         # EXTENSION_READERS map + get_reader_name
+        ├── pdf.py              # OCR via pdf2image + Tesseract
+        ├── images.py           # OCR for PNG/JPG/BMP/WEBP/HEIC (single page) and TIFF (multi-page)
+        ├── docx.py             # python-docx: paragraphs + tables
+        ├── pptx.py             # python-pptx: shapes + tables
+        ├── xlsx.py             # openpyxl: worksheets as pages
+        └── legacy.py           # .doc/.xls/.ppt → LibreOffice → modern reader
 ```
 
 ## 🔍 Code description
+
+### `ocr_extractor.dispatcher.read_document(path, *, dpi=300, lang="eng", verbose=True)`
+Format-agnostic entry point. Detects the file extension, picks the
+right reader from `ocr_extractor.readers.EXTENSION_READERS`, and
+returns its output. Raises `FileNotFoundError` for missing files and
+`ValueError` for unsupported extensions.
 
 ### `ocr_extractor.core.preprocess_image(image_pil)`
 Converts a PIL image to an OpenCV array, turns it grayscale, and applies
@@ -223,7 +279,8 @@ grayscale image ready for OCR.
 ### `ocr_extractor.core.clean_line(line)`
 Cleans a single text line:
 - Discards lines shorter than 2 characters.
-- Replaces any character not in `a-zA-Z0-9 '-,.!?'` with a space.
+- Replaces any character not in `a-zA-Z0-9 '-.!?` with a space (note:
+  the comma is **not** allowed — see "Customization" below).
 - Collapses multiple spaces into one.
 - Discards lines that contain only symbols (`()[]{}_-=+*#@^.,:;<>/\|~`).
 
@@ -231,7 +288,7 @@ Cleans a single text line:
 Applies `clean_line` to every line of the text and keeps only the lines
 that pass the filter. Returns the cleaned text joined with newlines.
 
-### `ocr_extractor.core.read_pdf(pdf_path, dpi=300, lang="eng", verbose=True)`
+### `ocr_extractor.readers.pdf.read_pdf_pages(pdf_path, dpi=300, lang="eng", verbose=True)`
 Iterates over every page of the PDF:
 1. Renders each page to an image with `convert_from_path(pdf_path, dpi=dpi)`.
 2. Preprocesses the image with `preprocess_image`.
@@ -240,12 +297,44 @@ Iterates over every page of the PDF:
 5. Wraps the result between the markers
    `=== PAGE N ===` … `=== END PAGE N ===`.
 
+### `ocr_extractor.readers.images.read_image(path, *, dpi, lang, verbose)`
+Opens a single-page image (PNG, JPG, BMP, WEBP, HEIC) with Pillow,
+runs it through `preprocess_image` and `pytesseract.image_to_string`,
+and returns the cleaned text without page markers. HEIC requires
+`pillow-heif` (install via `pip install ocr-extractor[heic]`).
+
+### `ocr_extractor.readers.images.read_tiff(path, *, dpi, lang, verbose)`
+Iterates over every frame of a multi-page TIFF. Each frame is OCR'd
+and wrapped in `=== PAGE N ===` / `=== END PAGE N ===` markers, just
+like the PDF reader.
+
+### `ocr_extractor.readers.docx.read_docx(path, *, dpi, lang, verbose)`
+Walks the document body in order, emitting one line per non-empty
+paragraph and one line per table row (cells joined with ` | `). DOCX
+files are not paginated, so no page markers are emitted.
+
+### `ocr_extractor.readers.pptx.read_pptx(path, *, dpi, lang, verbose)`
+Iterates over slides, extracting text from every shape that has a
+`text_frame` and from tables. Each slide becomes one `=== PAGE N ===`
+marker block.
+
+### `ocr_extractor.readers.xlsx.read_xlsx(path, *, dpi, lang, verbose)`
+Opens the workbook with `openpyxl` (`read_only=True`, `data_only=True`),
+iterates every worksheet, and emits one `=== PAGE <sheet name> ===`
+block per sheet. Rows become ` | col1 | col2 | col3`.
+
+### `ocr_extractor.readers.legacy.read_legacy_office(path, *, dpi, lang, verbose)`
+Shells out to `soffice --headless --convert-to <modern>` to convert
+`.doc`/`.xls`/`.ppt` to `.docx`/`.xlsx`/`.pptx`, then delegates to the
+corresponding modern reader. Raises `RuntimeError` with installation
+instructions if LibreOffice is not installed on the system.
+
 ### `ocr_extractor.cli.main(argv=None)`
 Entry point registered in `pyproject.toml` as
 `ocr-extractor = "ocr_extractor.cli:main"`. Parses arguments with
-`argparse`, validates that the PDF exists, calls `read_pdf`, and writes
-the result to the output file. Returns the process exit code (`0` for
-success, `1` on error).
+`argparse`, validates that the input file exists, calls `read_document`,
+and writes the result to the output file. All errors are caught at the
+top level; the process exits with `0` on success, `1` on error.
 
 ### `app.py` (wrapper)
 A few lines that import `ocr_extractor.cli.main` and call it when the
@@ -278,17 +367,17 @@ text with this structure:
 ## ⚙️ Customization
 
 - **Change input / output / language / DPI**: use the CLI arguments
-  (`--input`, `-o`, `--lang`, `--dpi`) or the `read_pdf` parameters from
-  the API:
+  (`-o`, `--lang`, `--dpi`) or the `read_document` parameters from the
+  API:
   ```python
-  from ocr_extractor import read_pdf
-  text = read_pdf("file.pdf", dpi=400, lang="spa")
+  from ocr_extractor import read_document
+  text = read_document("file.pdf", dpi=400, lang="spa")
   ```
 - **Adjust the resolution**: higher `dpi` (400–600) gives better results
   on low-quality documents, at the cost of more memory and time.
 - **Loosen the character filter**: extend the `allowed` set inside
   `ocr_extractor.core.clean_line` to allow additional characters (for
-  example, `áéíóúÁÉÍÓÚñÑ¿¡`). Since it lives inside `ocr_extractor/`,
+  example, `,áéíóúÁÉÍÓÚñÑ¿¡`). Since it lives inside `ocr_extractor/`,
   rerun `pip install -e .` after a change so the installed CLI picks it up.
 
 ## 🧪 Troubleshooting
@@ -301,6 +390,10 @@ text with this structure:
 | `pdf2image` fails with a Poppler error | Poppler is not installed | Install `poppler-utils` (Linux) or `brew install poppler` (macOS) |
 | Extracted text is empty | Image-based PDF with very low resolution | Raise `--dpi` or improve the source PDF |
 | Accented characters / ñ are lost | `clean_line` only allows ASCII | Extend the `allowed` set with `áéíóúÁÉÍÓÚñÑ¿¡` |
+| `unsupported file extension '.xyz'` | The format isn't supported | Check `ocr_extractor.SUPPORTED_FORMATS` for the supported list |
+| LibreOffice error on `.doc`/`.xls`/`.ppt` | `soffice` is not on the `PATH` | Install LibreOffice (see Requirements) |
+| `cannot identify image file '.heic'` | `pillow-heif` is not installed | `pip install ocr-extractor[heic]` |
+| `DeprecationWarning: ocr_extractor.read_pdf is deprecated` | Code still imports the old `read_pdf` | Switch to `from ocr_extractor import read_document` |
 | Encoding errors in the `.txt` | File opened without UTF-8 | The CLI uses `encoding="utf-8"`; if you write manually, use the same encoding |
 | Slow on long PDFs | 300 DPI rendering + per-page OCR | Lower `--dpi` or process the PDF in batches |
 
