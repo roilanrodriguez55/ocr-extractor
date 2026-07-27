@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-27
+
+### Changed
+- Republished to PyPI with a clean upload history. The v0.3.0 release on PyPI
+  was re-uploaded after a manual deletion and PyPI rejected the filename for
+  re-use, so the package version was bumped to give the build artefacts a
+  fresh name on the index.
+
 ## [0.3.0] - 2026-07-27
 
 ### Added
