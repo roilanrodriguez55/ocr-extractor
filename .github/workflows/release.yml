@@ -1,8 +1,8 @@
 name: Release
 
-# Triggers on every pushed tag matching v*. The job that publishes to PyPI
-# is skipped if the PYPI_TOKEN secret is not configured, so the workflow
-# remains safe to run while the maintainer is still setting up credentials.
+# Triggers on every pushed tag matching v*. Re-runs can be triggered manually
+# from the Actions tab once the maintainer needs to republish (the publish
+# job requires the PYPI_TOKEN secret to be configured on the repository).
 
 on:
   push:
@@ -39,9 +39,6 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
-    # Skip publishing when the PyPI token is not configured. Remove this
-    # conditional once the secret is set on the repository.
-    if: ${{ secrets.PYPI_TOKEN }}
     environment:
       name: pypi
       url: https://pypi.org/p/ocr-extractor
