@@ -57,6 +57,9 @@ jobs:
   github-release:
     name: Attach wheels to GitHub Release
     needs: build
+    # Only run when triggered by a tag push; workflow_dispatch has no tag
+    # to attach to. The release is created out-of-band by the maintainer.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
