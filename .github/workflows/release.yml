@@ -8,6 +8,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
   build:
@@ -38,9 +39,9 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
-    # Skip publishing when the PyPI token is not configured. Replace this
-    # with `if: always()` (or remove the conditional) once the secret is set.
-    if: ${{ secrets.PYPI_TOKEN != '' }}
+    # Skip publishing when the PyPI token is not configured. Remove this
+    # conditional once the secret is set on the repository.
+    if: ${{ secrets.PYPI_TOKEN }}
     environment:
       name: pypi
       url: https://pypi.org/p/ocr-extractor
