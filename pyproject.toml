@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ocr-extractor"
+version = "0.1.0"
+description = "Extract text from PDF files via OCR (Tesseract + OpenCV)."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    { name = "OCR Extractor Contributors" }
+]
+keywords = [
+    "ocr",
+    "tesseract",
+    "pdf",
+    "text-extraction",
+    "image-processing",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Text Processing :: Linguistic",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pytesseract>=0.3.10",
+    "pdf2image>=1.16.3",
+    "opencv-python-headless>=4.5",
+    "numpy>=1.21",
+    "Pillow>=9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "build>=0.10",
+]
+
+[project.scripts]
+ocr-extractor = "ocr_extractor.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/roilanrodriguez55/ocr-extractor"
+Issues = "https://github.com/roilanrodriguez55/ocr-extractor/issues"
+Source = "https://github.com/roilanrodriguez55/ocr-extractor"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ocr_extractor"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "documento.pdf",
+    "*.pdf",
+    "dist",
+    "build",
+    ".venv",
+]
