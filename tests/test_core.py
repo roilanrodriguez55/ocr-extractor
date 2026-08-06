@@ -4,7 +4,12 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from ocr_extractor.core import clean_line, clean_text, preprocess_image
+from ocr_extractor.core import (
+    DEFAULT_PUNCTUATION,
+    clean_line,
+    clean_text,
+    preprocess_image,
+)
 
 
 class TestCleanLine:
@@ -90,3 +95,47 @@ class TestPreprocessImage:
         assert out.shape == (100, 200)
         # White input stays white (denoising doesn't change it).
         assert out[0, 0] == 255
+
+
+class TestCleanLineIsUnicodeAware:
+    """The package advertises `lang="spa"` and friends. Before this, the
+    allowlist was spelled out A-Z, so Tesseract would read the word correctly
+    and the cleaner would hand back a mutilated one."""
+
+    def test_spanish_accents_survive(self):
+        assert clean_line("Cimentación") == "Cimentación"
+        assert clean_line("Diseño estructural") == "Diseño estructural"
+        assert clean_line("MEMORIA TÉCNICA") == "MEMORIA TÉCNICA"
+
+    def test_other_alphabets_survive(self):
+        assert clean_line("Ingénierie française") == "Ingénierie française"
+        assert clean_line("Präzision") == "Präzision"
+        assert clean_line("Конструкция") == "Конструкция"
+
+    def test_digits_and_letters_still_mix(self):
+        assert clean_line("Módulo 3") == "Módulo 3"
+
+
+class TestCleanLinePunctuationIsConfigurable:
+    """Technical documents need punctuation English prose does not: `:` is a
+    scale, `/` is a date, `,` is a decimal separator."""
+
+    def test_default_still_strips_technical_punctuation(self):
+        # Unchanged behaviour — existing callers keep what they had.
+        assert clean_line("Escala 1:50") == "Escala 1 50"
+        assert clean_line("12/03/2024") == "12 03 2024"
+
+    def test_widening_the_set_keeps_it(self):
+        punct = DEFAULT_PUNCTUATION + ":/,"
+        assert clean_line("Escala 1:50", punctuation=punct) == "Escala 1:50"
+        assert clean_line("12/03/2024", punctuation=punct) == "12/03/2024"
+
+    def test_clean_text_passes_the_set_through(self):
+        text = "Escala 1:50\nRev. B"
+        out = clean_text(text, punctuation=DEFAULT_PUNCTUATION + ":")
+        assert "1:50" in out
+
+    def test_symbol_only_lines_still_dropped_with_a_wider_set(self):
+        # Widening must not start letting decorative rules through.
+        assert clean_line("::::", punctuation=DEFAULT_PUNCTUATION + ":") is None
+        assert clean_line("//", punctuation=DEFAULT_PUNCTUATION + "/") is None
