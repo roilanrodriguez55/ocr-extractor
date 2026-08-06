@@ -28,7 +28,20 @@ library (`from ocr_extractor import read_document`).
 - [Customization](#-customization)
 - [Troubleshooting](#-troubleshooting)
 - [Publishing the package](#-publishing-the-package)
+- [Documentation](#-documentation)
 - [License](#-license)
+
+## 📚 Documentation
+
+Detailed documentation lives under [`docs/`](docs/):
+
+| Document | Purpose |
+|---|---|
+| [Getting started](docs/getting-started.md) | Install the package, install Tesseract and LibreOffice, run the first extraction. |
+| [Supported formats](docs/supported-formats.md) | Which extensions are supported, which reader handles each, and which dependencies they pull in. |
+| [API reference](docs/api.md) | Every public symbol: parameters, return types, and examples. |
+| [Architecture](docs/architecture.md) | How the dispatcher routes by extension, how `ocr_page` produces structured output, how confidence is computed. |
+| [Release process](docs/release-process.md) | How to cut a release: version bump, tag, PyPI publish, GitHub Release, verification, troubleshooting. |
 
 ## ✨ Features
 
