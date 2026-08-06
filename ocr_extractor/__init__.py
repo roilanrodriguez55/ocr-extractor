@@ -51,7 +51,7 @@ from ocr_extractor.dispatcher import read_document, read_document_detailed
 from ocr_extractor.readers import SUPPORTED_FORMATS
 from ocr_extractor.result import DocumentResult, PageResult, Word
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 
 __all__ = [
     "__version__",

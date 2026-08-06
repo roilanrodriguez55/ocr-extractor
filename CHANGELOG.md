@@ -55,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already carries a text layer. Extracting that layer instead would be exact
   and far cheaper; it is a separate change.
 
-## [0.3.1] - 2026-07-27
+## [0.4.0] - 2026-07-27
 
 ### Changed
 - Republished to PyPI with a clean upload history. The v0.3.0 release on PyPI
