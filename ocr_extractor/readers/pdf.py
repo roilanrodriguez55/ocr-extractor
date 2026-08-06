@@ -9,7 +9,7 @@ result is wrapped in ``=== PAGE N ===`` / ``=== END PAGE N ===`` markers.
 from pdf2image import convert_from_path
 
 from ocr_extractor.core import DEFAULT_PUNCTUATION, clean_text, ocr_page, preprocess_image
-from ocr_extractor.result import DocumentResult
+from ocr_extractor.result import DocumentResult, wrap_page
 import pytesseract
 
 
@@ -48,9 +48,7 @@ def read_pdf_pages(pdf_path, dpi=300, lang="eng", verbose=True):
         text = pytesseract.image_to_string(img_processed, lang=lang)
         text = clean_text(text)
 
-        all_text += "=== PAGE " + str(i + 1) + " ===\n\n"
-        all_text += text + "\n\n"
-        all_text += "=== END PAGE " + str(i + 1) + " ===\n\n"
+        all_text += wrap_page(i + 1, text)
 
     return all_text
 

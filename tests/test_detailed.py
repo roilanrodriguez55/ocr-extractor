@@ -158,6 +158,21 @@ class TestMarkedTextSplitting:
         assert [p.label for p in parsed] == ['Costes', 'Plazos']
         assert [p.text for p in parsed] == ['first', 'second']
 
+    def test_a_readers_own_output_parses(self):
+        # The round-trip above only proves DocumentResult.text agrees with the
+        # parser — both build on the constants. This proves the READERS do too.
+        # They used to spell the markers out themselves, which left the
+        # constants decorative for producers: changing them would have moved
+        # the parser and not the five emitters, and every Office file would
+        # have come back as one unsplit page with no error anywhere.
+        from ocr_extractor.result import wrap_page
+
+        emitted = wrap_page('Costes', 'first') + wrap_page(2, 'second')
+        parsed = _pages_from_marked_text(emitted)
+
+        assert [p.label for p in parsed] == ['Costes', '2']
+        assert [p.text for p in parsed] == ['first', 'second']
+
     def test_a_label_cannot_swallow_a_block_boundary(self):
         # `[^=\n]+?` rather than `.+?`: labels are page numbers or worksheet
         # names, so constraining them stops the pattern spanning two blocks if

@@ -9,6 +9,7 @@ text form.
 import re
 
 from openpyxl import load_workbook
+from ocr_extractor.result import wrap_page
 
 
 def _clean_cell(value):
@@ -66,7 +67,7 @@ def read_xlsx(path, *, dpi=300, lang="eng", verbose=True):
                     lines.append(stripped)
 
             body = "\n".join(lines)
-            all_text += f"=== PAGE {sheet_name} ===\n\n{body}\n\n=== END PAGE {sheet_name} ===\n\n"
+            all_text += wrap_page(sheet_name, body)
     finally:
         wb.close()
 

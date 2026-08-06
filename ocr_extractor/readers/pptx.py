@@ -9,6 +9,7 @@ from tables (each row becomes one line).
 import re
 
 from pptx import Presentation
+from ocr_extractor.result import wrap_page
 
 
 def _light_clean(text):
@@ -79,7 +80,7 @@ def read_pptx(path, *, dpi=300, lang="eng", verbose=True):
             lines.extend(_shape_text_lines(shape))
 
         body = "\n".join(lines)
-        all_text += f"=== PAGE {i} ===\n\n{body}\n\n=== END PAGE {i} ===\n\n"
+        all_text += wrap_page(i, body)
 
     return all_text
 

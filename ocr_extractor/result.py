@@ -17,6 +17,26 @@ PAGE_START = "=== PAGE {label} ==="
 PAGE_END = "=== END PAGE {label} ==="
 
 
+def wrap_page(label, body):
+    """Write one marker-delimited page block.
+
+    The single place this format is produced. Every reader calls it, the
+    parser in :mod:`ocr_extractor.dispatcher` is built from the same two
+    constants, and so the emitters and the parser cannot drift apart.
+
+    That mattered: each reader used to spell the markers out itself, so the
+    constants were decorative for producers. Changing them would have moved the
+    parser without moving the five emitters — and the failure is SILENT, since
+    text that does not match simply comes back as one unsplit page with no
+    error anywhere.
+    """
+    return (
+        f"{PAGE_START.format(label=label)}\n\n"
+        f"{body}\n\n"
+        f"{PAGE_END.format(label=label)}\n\n"
+    )
+
+
 @dataclass(frozen=True)
 class Word:
     """One recognised word and where it sits on the page.
@@ -97,12 +117,7 @@ class DocumentResult:
         if len(self.pages) == 1:
             return self.pages[0].text
 
-        out = ""
-        for page in self.pages:
-            out += PAGE_START.format(label=page.label) + "\n\n"
-            out += page.text + "\n\n"
-            out += PAGE_END.format(label=page.label) + "\n\n"
-        return out
+        return "".join(wrap_page(page.label, page.text) for page in self.pages)
 
     @cached_property
     def confidence(self):
@@ -135,4 +150,11 @@ class DocumentResult:
         return any(p.is_ocr for p in self.pages)
 
 
-__all__ = ["Word", "PageResult", "DocumentResult", "PAGE_START", "PAGE_END"]
+__all__ = [
+    "Word",
+    "PageResult",
+    "DocumentResult",
+    "PAGE_START",
+    "PAGE_END",
+    "wrap_page",
+]

@@ -12,7 +12,7 @@ import pytesseract
 from PIL import Image, ImageSequence
 
 from ocr_extractor.core import DEFAULT_PUNCTUATION, clean_text, ocr_page, preprocess_image
-from ocr_extractor.result import DocumentResult
+from ocr_extractor.result import DocumentResult, wrap_page
 
 
 def _ensure_heif_support():
@@ -118,7 +118,7 @@ def read_tiff(path, *, dpi=300, lang="eng", verbose=True):
         text = pytesseract.image_to_string(img_processed, lang=lang)
         text = clean_text(text)
 
-        all_text += f"=== PAGE {i} ===\n\n{text}\n\n=== END PAGE {i} ===\n\n"
+        all_text += wrap_page(i, text)
 
     return all_text
 

@@ -14,6 +14,8 @@ import numpy as np
 import pytesseract
 from pdf2image import convert_from_path
 
+from ocr_extractor.result import wrap_page
+
 
 def preprocess_image(image_pil):
     """Convert a PIL image to grayscale and apply denoising.
@@ -243,9 +245,7 @@ def _read_pdf_legacy(pdf_path, dpi=300, lang="eng", verbose=True):
         text = pytesseract.image_to_string(img_processed, lang=lang)
         text = clean_text(text)
 
-        all_text += "=== PAGE " + str(i + 1) + " ===\n\n"
-        all_text += text + "\n\n"
-        all_text += "=== END PAGE " + str(i + 1) + " ===\n\n"
+        all_text += wrap_page(i + 1, text)
 
     return all_text
 
