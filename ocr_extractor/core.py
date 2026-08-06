@@ -14,6 +14,8 @@ import numpy as np
 import pytesseract
 from pdf2image import convert_from_path
 
+from ocr_extractor.result import wrap_page
+
 
 def preprocess_image(image_pil):
     """Convert a PIL image to grayscale and apply denoising.
@@ -34,14 +36,32 @@ def preprocess_image(image_pil):
     return denoised
 
 
-def clean_line(line):
+#: Punctuation kept by :func:`clean_line` on top of letters and digits.
+#: Everything else becomes a space. Widen it for technical documents, where
+#: ``:`` (scales), ``/`` (dates) and ``,`` (decimals) carry meaning:
+#: ``clean_line(line, punctuation=DEFAULT_PUNCTUATION + ":/,")``.
+DEFAULT_PUNCTUATION = " '-.!?"
+
+
+def clean_line(line, punctuation=DEFAULT_PUNCTUATION):
     """Clean a single text line: drop short lines and symbol-only lines,
     and replace disallowed characters with spaces.
+
+    Letters and digits are kept for **every** alphabet, not just ASCII. The
+    previous allowlist was spelled out A–Z, which silently turned every
+    accented character into a space: with ``lang="spa"`` Tesseract would read
+    *Cimentación* correctly and this function would hand back *Cimentaci n*.
+    Since dropping accents was never the intent for a package that advertises
+    non-English language codes, that is treated as a fix rather than a
+    behaviour change.
 
     Parameters
     ----------
     line : str
         The text line to clean.
+    punctuation : str, optional
+        Characters to keep alongside letters and digits. Defaults to
+        :data:`DEFAULT_PUNCTUATION`.
 
     Returns
     -------
@@ -52,8 +72,10 @@ def clean_line(line):
     if len(line) < 2:
         return None
 
-    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 '-.!?")
-    clean = "".join(c if c in allowed else " " for c in line)
+    allowed = set(punctuation)
+    # ``str.isalnum`` is Unicode-aware, so this keeps á, ñ, ü, ç, Cyrillic,
+    # CJK and everything else Tesseract can be asked to read.
+    clean = "".join(c if (c.isalnum() or c in allowed) else " " for c in line)
     clean = re.sub(r"\s+", " ", clean).strip()
 
     if len(clean) < 2:
@@ -66,7 +88,7 @@ def clean_line(line):
     return clean
 
 
-def clean_text(text):
+def clean_text(text, punctuation=DEFAULT_PUNCTUATION):
     """Apply :func:`clean_line` to every line of ``text`` and return the
     result keeping only the valid lines.
 
@@ -74,6 +96,8 @@ def clean_text(text):
     ----------
     text : str
         Raw text produced by OCR.
+    punctuation : str, optional
+        Passed through to :func:`clean_line`.
 
     Returns
     -------
@@ -83,10 +107,104 @@ def clean_text(text):
     lines = text.split("\n")
     cleaned = []
     for line in lines:
-        result = clean_line(line)
+        result = clean_line(line, punctuation=punctuation)
         if result:
             cleaned.append(result)
     return "\n".join(cleaned)
+
+
+def ocr_page(image_pil, *, lang="eng", label="1", clean=False,
+             punctuation=DEFAULT_PUNCTUATION, preprocess=True):
+    """OCR one image and return a :class:`~ocr_extractor.result.PageResult`.
+
+    Uses ``pytesseract.image_to_data`` rather than ``image_to_string``: the
+    same Tesseract pass costs the same and additionally yields a confidence
+    and a bounding box per word. That is what lets a caller decide on its own
+    whether the page came out well enough to trust, instead of having to guess
+    from the text.
+
+    Parameters
+    ----------
+    image_pil : PIL.Image.Image
+        The page to read.
+    lang : str, optional
+        Tesseract language code (``"eng"``, ``"spa"``, ``"spa+eng"``).
+    label : str, optional
+        Page label carried into the result (``"1"``, ``"Sheet1"``, ...).
+    clean : bool, optional
+        Run :func:`clean_text` over the result. Defaults to ``False`` here,
+        the opposite of :func:`ocr_extractor.read_document` — a caller asking
+        for structured output usually wants what Tesseract actually said.
+    punctuation : str, optional
+        Passed to :func:`clean_text` when ``clean`` is true.
+    preprocess : bool, optional
+        Apply :func:`preprocess_image` first. Turn it off for images that are
+        already binarised, or when the denoiser is eating thin strokes.
+
+    Returns
+    -------
+    ocr_extractor.result.PageResult
+    """
+    from ocr_extractor.result import PageResult, Word
+
+    image = preprocess_image(image_pil) if preprocess else np.array(image_pil)
+    data = pytesseract.image_to_data(
+        image, lang=lang, output_type=pytesseract.Output.DICT,
+    )
+
+    words = []
+    # Tesseract emits a row per layout element -- block, paragraph, line -- and
+    # marks those with conf == -1. Only rows carrying actual text are words.
+    for i, raw in enumerate(data["text"]):
+        text = raw.strip()
+        confidence = float(data["conf"][i])
+        if not text or confidence < 0:
+            continue
+        words.append(
+            Word(
+                text=text,
+                confidence=confidence,
+                left=int(data["left"][i]),
+                top=int(data["top"][i]),
+                width=int(data["width"][i]),
+                height=int(data["height"][i]),
+            )
+        )
+
+    text = _text_from_data(data)
+    if clean:
+        text = clean_text(text, punctuation=punctuation)
+
+    # 0.0 rather than None for a page that yielded nothing: it WAS OCR'd, and
+    # it is exactly the page somebody should look at.
+    mean = sum(w.confidence for w in words) / len(words) if words else 0.0
+
+    return PageResult(
+        label=str(label), text=text, words=tuple(words), confidence=mean,
+    )
+
+
+def _text_from_data(data):
+    """Rebuild the page text from an ``image_to_data`` dict, keeping lines.
+
+    Grouping by (block, paragraph, line) restores the line breaks that
+    ``image_to_string`` gives for free. They matter: a drawing's title block is
+    a stack of short lines, and flattening it into one run destroys the only
+    structure it had.
+    """
+    lines = {}
+    order = []
+    for i, raw in enumerate(data["text"]):
+        text = raw.strip()
+        if not text or float(data["conf"][i]) < 0:
+            continue
+        key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
+        if key not in lines:
+            lines[key] = []
+            order.append(key)
+        lines[key].append(text)
+
+    return "\n".join(" ".join(lines[key]) for key in order)
 
 
 def _read_pdf_legacy(pdf_path, dpi=300, lang="eng", verbose=True):
@@ -127,9 +245,7 @@ def _read_pdf_legacy(pdf_path, dpi=300, lang="eng", verbose=True):
         text = pytesseract.image_to_string(img_processed, lang=lang)
         text = clean_text(text)
 
-        all_text += "=== PAGE " + str(i + 1) + " ===\n\n"
-        all_text += text + "\n\n"
-        all_text += "=== END PAGE " + str(i + 1) + " ===\n\n"
+        all_text += wrap_page(i + 1, text)
 
     return all_text
 
@@ -150,8 +266,10 @@ def read_pdf(pdf_path, dpi=300, lang="eng", verbose=True):
 
 
 __all__ = [
+    "DEFAULT_PUNCTUATION",
     "preprocess_image",
     "clean_line",
     "clean_text",
+    "ocr_page",
     "read_pdf",
 ]

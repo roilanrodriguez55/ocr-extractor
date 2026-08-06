@@ -130,7 +130,7 @@ To pin or constrain the version in `pyproject.toml` / `requirements.txt`:
 
 ```text
 # requirements.txt
-ocr-extractor>=0.3.1
+ocr-extractor>=0.4.0
 ```
 
 For HEIC/HEIF support (iPhone photos), install the `[heic]` extra:
@@ -231,12 +231,63 @@ gray = preprocess_image(pages[0])  # numpy.ndarray ready for OCR
 Functions exposed from `ocr_extractor`:
 
 - `read_document(path, *, dpi=300, lang="eng", verbose=True) -> str`
+- `read_document_detailed(path, *, dpi=300, lang="eng", verbose=True, clean=False, punctuation=DEFAULT_PUNCTUATION) -> DocumentResult`
+- `ocr_page(image_pil, *, lang="eng", label="1", clean=False, preprocess=True) -> PageResult`
 - `preprocess_image(image_pil) -> numpy.ndarray`
-- `clean_line(line) -> str | None`
-- `clean_text(text) -> str`
+- `clean_line(line, punctuation=DEFAULT_PUNCTUATION) -> str | None`
+- `clean_text(text, punctuation=DEFAULT_PUNCTUATION) -> str`
 - `read_pdf(pdf_path, dpi=300, lang="eng", verbose=True) -> str` *(deprecated, will be removed in the next major release)*
+- `DocumentResult`, `PageResult`, `Word` — the structured result types
+- `DEFAULT_PUNCTUATION` — characters `clean_line` keeps besides letters and digits
 - `SUPPORTED_FORMATS` — tuple of all supported extensions
-- `__version__` — string, e.g. `"0.3.1"`
+- `__version__` — string, e.g. `"0.4.0"`
+
+### Confidence: deciding whether a page is good enough
+
+`read_document` gives you text. When something downstream has to *decide*
+whether that text can be trusted — send it to a human, retry with a better
+model, index it as-is — use `read_document_detailed`. It runs the same single
+Tesseract pass and additionally returns a confidence per page and a bounding
+box per word.
+
+```python
+from ocr_extractor import read_document_detailed
+
+doc = read_document_detailed("plano.pdf", lang="spa+eng")
+
+doc.confidence          # 0-100, weighted by word count across OCR'd pages
+doc.pages[0].text       # text, with line breaks preserved
+doc.pages[0].word_count
+doc.pages[0].words[0]   # Word(text=..., confidence=..., left=..., top=..., width=..., height=...)
+
+if doc.confidence < 70:
+    escalate(doc)       # handwriting, a bad scan, a blank sheet
+```
+
+**`confidence is None` means the text did not come from OCR** — a DOCX, PPTX
+or XLSX is read exactly, so how confident the reader was is not a meaningful
+question. That is deliberately different from `100`. A page that *was* OCR'd
+and yielded nothing scores `0.0`, because that is an answer, and it is exactly
+the page somebody should look at.
+
+The word boxes make it possible to work on a region instead of the whole page
+— an engineering drawing's title block, a stamp, a table cell — which is
+usually far more accurate than OCR'ing a whole A0 sheet at once.
+
+### Cleaning is optional, and configurable
+
+`read_document` cleans its output; `read_document_detailed` does not, because
+a caller asking for structure normally wants what Tesseract actually said.
+
+Cleaning keeps letters and digits from **every** alphabet, plus
+`DEFAULT_PUNCTUATION` (`` '-.!? ``). Technical documents often need more:
+
+```python
+from ocr_extractor import clean_line, DEFAULT_PUNCTUATION
+
+clean_line("Escala 1:50")                                    # 'Escala 1 50'
+clean_line("Escala 1:50", punctuation=DEFAULT_PUNCTUATION + ":/,")  # 'Escala 1:50'
+```
 
 ### Backward-compatible `app.py` wrapper
 
@@ -417,7 +468,7 @@ To build an sdist and a wheel locally (requires the `dev` extra):
 ```bash
 pip install -e ".[dev]"
 python -m build
-ls dist/   # should show ocr_extractor-0.3.1.tar.gz and *.whl
+ls dist/   # should show ocr_extractor-0.4.0.tar.gz and *.whl
 ```
 
 To publish to PyPI (use the token you have in `~/.pypirc` or env vars):

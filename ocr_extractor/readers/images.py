@@ -11,7 +11,8 @@ from pathlib import Path
 import pytesseract
 from PIL import Image, ImageSequence
 
-from ocr_extractor.core import clean_text, preprocess_image
+from ocr_extractor.core import DEFAULT_PUNCTUATION, clean_text, ocr_page, preprocess_image
+from ocr_extractor.result import DocumentResult, wrap_page
 
 
 def _ensure_heif_support():
@@ -117,9 +118,54 @@ def read_tiff(path, *, dpi=300, lang="eng", verbose=True):
         text = pytesseract.image_to_string(img_processed, lang=lang)
         text = clean_text(text)
 
-        all_text += f"=== PAGE {i} ===\n\n{text}\n\n=== END PAGE {i} ===\n\n"
+        all_text += wrap_page(i, text)
 
     return all_text
 
 
-__all__ = ["read_image", "read_tiff"]
+def read_image_detailed(path, *, dpi=300, lang="eng", verbose=True,
+                        clean=False, punctuation=DEFAULT_PUNCTUATION):
+    """Like :func:`read_image`, but returns a
+    :class:`~ocr_extractor.result.DocumentResult` carrying per-word
+    confidences and boxes."""
+    p = Path(path)
+    if p.suffix.lower() in (".heic", ".heif"):
+        _ensure_heif_support()
+
+    if verbose:
+        print(f"Reading {p}...")
+
+    img = Image.open(p)
+    img.load()
+    page = ocr_page(
+        img, lang=lang, label="1", clean=clean, punctuation=punctuation,
+    )
+    return DocumentResult(path=str(p), pages=(page,))
+
+
+def read_tiff_detailed(path, *, dpi=300, lang="eng", verbose=True,
+                       clean=False, punctuation=DEFAULT_PUNCTUATION):
+    """Like :func:`read_tiff`, but returns a
+    :class:`~ocr_extractor.result.DocumentResult`, one page per frame."""
+    if verbose:
+        print(f"Reading {path}...")
+
+    img = Image.open(path)
+    pages = []
+
+    for i, frame in enumerate(ImageSequence.Iterator(img), 1):
+        if verbose:
+            print(f"Processing page {i}...")
+        if frame.mode != "RGB":
+            frame = frame.convert("RGB")
+        pages.append(
+            ocr_page(
+                frame, lang=lang, label=str(i), clean=clean,
+                punctuation=punctuation,
+            )
+        )
+
+    return DocumentResult(path=str(path), pages=tuple(pages))
+
+
+__all__ = ["read_image", "read_tiff", "read_image_detailed", "read_tiff_detailed"]
