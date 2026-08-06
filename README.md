@@ -117,7 +117,7 @@ To pin or constrain the version in `pyproject.toml` / `requirements.txt`:
 
 ```text
 # requirements.txt
-ocr-extractor>=0.3.1
+ocr-extractor>=0.4.0
 ```
 
 For HEIC/HEIF support (iPhone photos), install the `[heic]` extra:
@@ -455,7 +455,7 @@ To build an sdist and a wheel locally (requires the `dev` extra):
 ```bash
 pip install -e ".[dev]"
 python -m build
-ls dist/   # should show ocr_extractor-0.3.1.tar.gz and *.whl
+ls dist/   # should show ocr_extractor-0.4.0.tar.gz and *.whl
 ```
 
 To publish to PyPI (use the token you have in `~/.pypirc` or env vars):

@@ -10,14 +10,36 @@ from pathlib import Path
 
 from ocr_extractor.core import DEFAULT_PUNCTUATION
 from ocr_extractor.readers import EXTENSION_READERS, get_reader_name
-from ocr_extractor.result import DocumentResult, PageResult
+from ocr_extractor.result import PAGE_END, PAGE_START, DocumentResult, PageResult
+
+
+def _page_block_pattern():
+    """Build the page-marker regex FROM the marker constants.
+
+    Spelling the markers out here as a literal would put the same format in two
+    places, and the copy that drifts is the one that fails silently: a changed
+    separator would still emit and still parse-as-nothing, so every Office file
+    would quietly come back as a single unsplit page.
+
+    The label is matched with ``[^=\\n]+?`` rather than ``.+?``: labels are page
+    numbers or worksheet names, neither of which can contain a newline or an
+    ``=``, and constraining it stops the pattern from spanning a block boundary
+    if a body ever contains marker-like text.
+    """
+    start_pre, start_post = PAGE_START.split("{label}")
+    end_pre, end_post = PAGE_END.split("{label}")
+
+    return re.compile(
+        re.escape(start_pre) + r"(?P<label>[^=\n]+?)" + re.escape(start_post)
+        + r"\n(?P<body>.*?)\n"
+        + re.escape(end_pre) + r"(?P=label)" + re.escape(end_post),
+        re.DOTALL,
+    )
+
 
 #: Matches the page markers the string readers emit. The label is not always a
 #: number -- worksheets are named -- so it is captured as text.
-_PAGE_BLOCK = re.compile(
-    r"=== PAGE (?P<label>.+?) ===\n(?P<body>.*?)\n=== END PAGE (?P=label) ===",
-    re.DOTALL,
-)
+_PAGE_BLOCK = _page_block_pattern()
 
 
 def read_document(path, *, dpi=300, lang="eng", verbose=True):

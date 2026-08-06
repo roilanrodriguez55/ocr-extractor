@@ -88,3 +88,42 @@ class TestDocumentText:
         # Worksheets are named, not numbered.
         doc = DocumentResult("a.xlsx", (_page("Costes", "x"), _page("Plazos", "y")))
         assert "=== PAGE Costes ===" in doc.text
+
+    def test_text_is_cached(self):
+        # A thousand-page scan would otherwise rebuild a multi-megabyte string
+        # on every access. `cached_property` works here because it writes into
+        # __dict__ rather than through the frozen dataclass's __setattr__.
+        doc = DocumentResult("a.pdf", (_page("1", "one"), _page("2", "two")))
+        assert doc.text is doc.text
+
+    def test_confidence_is_cached(self):
+        doc = DocumentResult("a.pdf", (_page("1", "w w", confidence=50.0),))
+        first = doc.confidence
+        assert first == 50.0
+        assert doc.confidence is doc.confidence
+
+
+class TestEmptyDocument:
+    """A document with no pages must answer, not raise.
+
+    Readers can legitimately produce one — an empty PDF, a spreadsheet whose
+    every sheet is blank — and a caller routing on `confidence` should get the
+    same "not OCR" answer it gets for a DOCX rather than an exception.
+    """
+
+    def setup_method(self):
+        self.doc = DocumentResult("empty.pdf", ())
+
+    def test_text_is_empty_not_an_error(self):
+        assert self.doc.text == ""
+
+    def test_confidence_is_none_not_zero(self):
+        # Nothing was OCR'd, so there is no score — not a score of zero, which
+        # would send a page that does not exist to a human reviewer.
+        assert self.doc.confidence is None
+
+    def test_is_not_ocr(self):
+        assert self.doc.is_ocr is False
+
+    def test_word_count_is_zero(self):
+        assert self.doc.word_count == 0

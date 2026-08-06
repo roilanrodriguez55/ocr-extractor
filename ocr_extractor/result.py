@@ -10,6 +10,7 @@ unchanged.
 """
 
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Optional, Tuple
 
 PAGE_START = "=== PAGE {label} ==="
@@ -79,13 +80,19 @@ class DocumentResult:
     path: str
     pages: Tuple[PageResult, ...] = field(default_factory=tuple)
 
-    @property
+    @cached_property
     def text(self):
         """The pages as one string.
 
         Multi-page documents get the same ``=== PAGE N ===`` markers
         :func:`read_document` produces; a single page is returned bare, also
         matching it. The two entry points therefore agree on output.
+
+        Cached: a thousand-page scan rebuilds a multi-megabyte string on every
+        access otherwise, and the pages are frozen. ``cached_property`` works
+        on a frozen dataclass because it writes straight into ``__dict__``
+        rather than going through the blocked ``__setattr__`` — computing this
+        in ``__post_init__`` instead would raise ``FrozenInstanceError``.
         """
         if len(self.pages) == 1:
             return self.pages[0].text
@@ -97,7 +104,7 @@ class DocumentResult:
             out += PAGE_END.format(label=page.label) + "\n\n"
         return out
 
-    @property
+    @cached_property
     def confidence(self):
         """Mean confidence across the OCR'd pages, weighted by word count.
 

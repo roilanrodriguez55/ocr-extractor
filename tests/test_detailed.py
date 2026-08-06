@@ -15,6 +15,7 @@ from PIL import Image, ImageDraw
 from ocr_extractor import read_document, read_document_detailed
 from ocr_extractor.core import ocr_page
 from ocr_extractor.dispatcher import _pages_from_marked_text
+from ocr_extractor.result import DocumentResult, PageResult
 
 HAS_TESSERACT = shutil.which("tesseract") is not None
 needs_tesseract = pytest.mark.skipif(
@@ -139,6 +140,34 @@ class TestMarkedTextSplitting:
         pages = _pages_from_marked_text("body from a docx")
         assert pages[0].confidence is None
 
+    def test_the_regex_stays_in_sync_with_the_marker_constants(self):
+        # The parser is built from PAGE_START/PAGE_END rather than repeating
+        # them, and this is what keeps that true. A drifted copy would fail
+        # SILENTLY — still emitting, still parsing as nothing — so every Office
+        # file would come back as one unsplit page with no error anywhere.
+        emitted = DocumentResult(
+            path='x.xlsx',
+            pages=(
+                PageResult(label='Costes', text='first'),
+                PageResult(label='Plazos', text='second'),
+            ),
+        ).text
+
+        parsed = _pages_from_marked_text(emitted)
+
+        assert [p.label for p in parsed] == ['Costes', 'Plazos']
+        assert [p.text for p in parsed] == ['first', 'second']
+
+    def test_a_label_cannot_swallow_a_block_boundary(self):
+        # `[^=\n]+?` rather than `.+?`: labels are page numbers or worksheet
+        # names, so constraining them stops the pattern spanning two blocks if
+        # a body ever contains marker-like text.
+        text = (
+            '=== PAGE 1 ===\n\nbody one\n\n=== END PAGE 1 ===\n\n'
+            '=== PAGE 2 ===\n\nbody two\n\n=== END PAGE 2 ===\n\n'
+        )
+        assert len(_pages_from_marked_text(text)) == 2
+
 
 class TestDispatch:
     def test_missing_file_raises(self, tmp_path):
@@ -150,6 +179,21 @@ class TestDispatch:
         p.write_text("x")
         with pytest.raises(ValueError):
             read_document_detailed(p)
+
+    def test_dpi_reaches_the_pdf_renderer(self, tmp_path):
+        # dpi is the single biggest lever on OCR quality for a scanned plan.
+        # Accepted at the API and dropped on the way down would be invisible:
+        # the text still comes back, just worse.
+        p = tmp_path / 'plan.pdf'
+        p.write_bytes(b'%PDF-1.4 stub')
+
+        with mock.patch(
+            'ocr_extractor.readers.pdf.convert_from_path', return_value=[],
+        ) as render:
+            read_document_detailed(p, dpi=600, verbose=False)
+
+        render.assert_called_once()
+        assert render.call_args.kwargs['dpi'] == 600
 
     def test_office_files_report_no_confidence(self, tmp_path):
         # Their text is exact — there is nothing for a reviewer to check.

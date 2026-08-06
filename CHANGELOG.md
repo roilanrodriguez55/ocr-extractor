@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.2] - 2026-08-05
+## [0.4.0] - 2026-08-05
 
 ### Fixed
 - **`clean_line` no longer strips non-English letters.** The allowlist was
@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and CJK. Dropping accents was never the intent for a package that advertises
   non-English language codes, so this is a fix, not a behaviour change —
   ASCII-only input is unaffected.
+  Note the widening also admits **non-ASCII digits** (Arabic-Indic ٤٥٢١,
+  Devanagari, fullwidth forms), where the old allowlist accepted `0-9` only.
+  Anyone who was relying on `clean_line` to strip them can restore the previous
+  behaviour with an explicit `punctuation` set plus their own filter.
 
 ### Added
 - **`read_document_detailed()`** — same dispatch as `read_document`, but
@@ -46,6 +50,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `preprocess=False` on `ocr_page`, for images that are already binarised or
   where the denoiser eats thin strokes.
 - Python 3.13 classifier.
+
+### Changed
+- `DocumentResult.text` and `DocumentResult.confidence` are cached. A
+  thousand-page scan rebuilt a multi-megabyte string on every access before;
+  the pages are frozen, so the value cannot go stale.
+- The page-marker parser is now derived from the `PAGE_START`/`PAGE_END`
+  constants instead of repeating them in a regex. A drifted copy would have
+  failed silently — still emitting, still parsing as nothing — leaving every
+  Office file as one unsplit page with no error anywhere.
 
 ### Notes
 - `read_document`, `read_pdf` and the CLI are untouched. The detailed API
